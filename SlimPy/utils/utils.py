@@ -1,16 +1,27 @@
 import math
+from time import sleep
 import numpy as np
 from numba import jit
 from multiprocess.shared_memory import SharedMemory 
 import matplotlib.pyplot as plt
+import spice_utils.ias_spice_utils.utils as spu
+from sunraster.instr.spice import read_spice_l2_fits
+from astropy.visualization import SqrtStretch,PowerStretch, AsymmetricPercentileInterval, ImageNormalize, MinMaxInterval
+from  pathlib import Path, PosixPath
+from astropy.io import fits as fits_reader
 import os
 
+
+
 def prepare_filenames(prefix=None, 
+                      data_filename =None,
                       plot_filename=None, 
                       data_save_dir="./.p/",
                       plot_save_dir="./imgs/", 
                       i=None,
                       verbose=0):
+    
+    
     if type(prefix)==str:
         filename = prefix+"_window_{:03d}_"+"{:}.p"
     elif prefix==None:
@@ -54,10 +65,26 @@ def prepare_filenames(prefix=None,
         if verbose>=1:print("working in the file with prefix i={:03d} ".format(j))
             #------------------------
         filename_a = dir + "{:03d}_".format(j)+"plot_{:03d}_"+"{}_{}.jpg"
-        filename_b = dir + "{:03d}_".format(j)+"hits_{:03d}_"+"{}_{}.jpg"
-        filename = dir2+"{:03d}_".format(j)+"window_{:03d}_"+"{}_{}.p"
+        filename_b = dir + "{:03d}_".format(j)+"hist_{:03d}_"+"{}_{}.jpg"
+        filename   = dir2+"{:03d}_".format(j)+"window_{:03d}_"+"{}_{}.p"
+    # print(data_filename)
+    if type(data_filename)!= type(None):
+        dir2 = data_save_dir
+        dir  = plot_save_dir
+        flnm = data_filename
+        if flnm[-2:] == ".p":
+            flnm = flnm[:-2]
+        filename_a = dir + (
+            "/" if (dir[-1] not in ["/","\\"]) or (flnm[0] not in ["/","\\"]) else 0  
+            )+ flnm+"_plot_{1}.jpg"
+        filename_b = dir + (
+            "/" if (dir[-1] not in ["/","\\"]) or (flnm[0] not in ["/","\\"]) else 0  
+            )+ flnm+"_hist_{1}.jpg"
+        filename   = dir2 + (
+            "/" if (dir2[-1] not in ["/","\\"]) or (flnm[0] not in ["/","\\"]) else 0  
+            )+ flnm+"_hist_{1}.p"
+    # print(filename_a,filename_b,filename)
     return filename,filename_a,filename_b
-
 
 def clean_nans(xdata:np.ndarray,
                ydata:np.ndarray,
@@ -77,7 +104,8 @@ def clean_nans(xdata:np.ndarray,
     """
     assert xdata.shape==ydata.shape
     num_elements = np.zeros(xdata.shape)
-    num_elements = np.logical_not((np.isnan(xdata)) | (np.isinf(xdata)) | (np.isinf(ydata)) | (np.isnan(ydata)) | (ydata<0))
+    num_elements = np.logical_not((np.isnan(xdata)) | (np.isinf(xdata)) | (np.isinf(ydata)) | (np.isnan(ydata)) | (ydata<-100))
+    
     clean_x = xdata[num_elements]; clean_y = ydata[num_elements]
     if type(weights) not in [str,type(None)]:
         weights = np.array(weights)
@@ -111,7 +139,10 @@ def clean_nans(xdata:np.ndarray,
 
 @jit(nopython=True)
 def fst_neigbors(
-        extent: float
+        extent        : float    ,
+        pixel_size_lon: float = 1,
+        pixel_size_lat: float = 1,
+        verbose       : float = 0
     ):
     """Generates a list of first neiboors in a square lattice and returns inside the list
         [n,m,n**2+m**2]
@@ -121,52 +152,19 @@ def fst_neigbors(
     Return:
         nm_list (np.ndarray): list of data [n,m,n**2+m**2]
     """
-    nm_list = np.array([
-        [0,0,0] 
-               ],dtype=np.int64)
-    N= 0
-    while True:
-        N+=1
-        Rmin = N
-        Rmax = N+1
-        if extent!=0:
-            for n in range(int(np.sqrt(Rmax))+1):
-                min_m = int(np.sqrt(Rmin-n**2) if Rmin-n**2>0 else 0 )
-                max_m = int(np.sqrt(Rmax-n**2)+1)
-                for m in range(min_m,max_m):    
-                    s = n**2 + m**2
-                    if s==Rmin:
-                        number_element = 1 
-                        if n!=0 and m!=0:
-                            number_element = 4 
-                        elif n!=0 or m!=0: 
-                            number_element = 2
-                        
-                        _list = np.zeros((nm_list.shape[0]+number_element,nm_list.shape[1]),
-                                        dtype=np.int64)
-                        _list[:-number_element] = nm_list
-                        _list[ -number_element] = n,m,s
-                        
-                        if n!=0 and m!=0:
-                            _list[ -3] = -n, m,s
-                            _list[ -1] = -n,-m,s
-                            _list[ -2] =  n,-m,s
-                            
-                        elif n!=0 or m!=0: 
-                            if n==0:
-                                _list[ -1] =  n,-m,s
-                            else :
-                                _list[ -1] =  -n,m,s
-                        
-                        nm_list=_list
-                        
-                        
-                    
-        if nm_list[-1,2] == extent**2:
-            # print(set(nm_list[:,2])) 
-            # for i in nm_list:
-            #     print(i)
-            return(nm_list)
+    
+    a = min(pixel_size_lon,pixel_size_lat) / pixel_size_lon
+    b = min(pixel_size_lon,pixel_size_lat) / pixel_size_lat
+    if verbose>=1: 
+        print("a=",a,"b=",b) 
+    nm_list = []
+    extent_2 = extent**2
+    for n in range(-extent,extent+1):
+        for m in range(-extent,extent+1):
+            s = a**2*n**2 + b**2*m**2
+            if s <= extent_2:
+                nm_list.append([n,m,s])
+    return nm_list
 
 @jit(nopython=True)
 def join_px(data,i,j,ijc_list):
@@ -253,7 +251,8 @@ def verbose_description(verbose):
     
 def gen_velocity(doppler_data,quite_sun=[60,150,550,600],correction=False,verbose=0,get_0lbdd = False):
     qs = quite_sun
-    mean_doppler = np.nanmedian(doppler_data[qs[2]:qs[3],qs[0]:qs[1]]) 
+    mean_doppler = np.nanmean(doppler_data[qs[2]:qs[3],qs[0]:qs[1]]) 
+    # print("mean_doppler",mean_doppler)
     results = (doppler_data-mean_doppler) / mean_doppler * 3*10**5
     if correction:
         if verbose >0: print("Correcting")
@@ -269,7 +268,7 @@ def gen_velocity(doppler_data,quite_sun=[60,150,550,600],correction=False,verbos
                     [qs[2],qs[2],qs[3],qs[3],qs[2]],color="green",label="mean value {:06.1f}".format(mean_doppler))
         plt.legend()
         # plt.savefig('fig_test.jpg')
-    return results, (None if not correction else ref),(None if not get_0lbdd else mean_doppler) 
+    return (results, (None if not correction else ref),(None if not get_0lbdd else mean_doppler)) 
 
 def gen_velocity_hist(velocity_data,axis=None,bins = None,verbose=0):
     hist,bins = np.histogram(velocity_data,bins = bins) 
@@ -289,3 +288,137 @@ def correct_velocity(velocity_hist,velocity_values,verbose=0):
     if verbose>0: print(f"the velocity reference was found at {ref_velocity}\n now it will be set to 0")
     velocity_values_corr = velocity_values-ref_velocity
     return velocity_values_corr,ref_velocity
+
+def get_celestial(raster):
+    unq = spu.unique_windows(raster)
+    lon = raster[unq[0]].celestial.data.lon.arcsec
+    lat = raster[unq[0]].celestial.data.lat.arcsec
+    lon[lon>180*3600]-=360*3600
+    lat[lat>180*3600]-=360*3600
+    return lon,lat
+
+def quickview(
+    RasterOrPath, 
+    fig1 = None, imag_ax = None, 
+    fig2 = None, spec_ax = None, 
+              ):
+    from pathlib import PosixPath,Path
+    if type(RasterOrPath) in (str,PosixPath):
+        raster = read_spice_l2_fits(str(RasterOrPath))
+    else: raster = RasterOrPath
+    unq = spu.unique_windows(raster)
+    lon,lat = get_celestial(raster)
+    n= 3
+    m= len(unq)//3 +( 1 if len(unq)%3 != 0 else 0)
+    
+    if type(imag_ax) == type(None): fig1,ax1 = plt.subplots(m,n,figsize=(n*3,m*3),sharex=True,sharey=True);ax1 = ax1.flatten() 
+    if type(spec_ax) == type(None): fig2,ax2 = plt.subplots(m,n,figsize=(n*3,m*3)                        );ax2 = ax2.flatten() 
+    fig1.suptitle(raster[unq[0]].meta['DATE_EAR'])
+    fig2.suptitle(raster[unq[0]].meta['DATE_EAR'])
+    for i,kw in enumerate(unq):
+        data = raster[unq[i]].data
+        image = np.nanmean(data, axis =(0,1))
+        spect = np.nanmean(data, axis =(0,2,3))
+        spec_ax = raster[unq[i]].spectral_axis*10**10
+        
+        norm = ImageNormalize(data,
+                              interval=AsymmetricPercentileInterval(1, 99),
+                              stretch=SqrtStretch()
+                              )
+        
+        ax1[i].pcolormesh(lon,lat,image,norm=norm)
+        ax2[i].step(spec_ax,spect)
+        ax1[i].set_title(kw)
+        ax2[i].set_title(kw)
+    return ((fig1,ax1),(fig2,ax2))
+
+def getfiles(L2_folder="/archive/SOLAR-ORBITER/SPICE/fits/level2/",YEAR="all",MONTH="all",DAY="all",STD_TYP="all",STP_NUM="all",SOOP_NAM="all",MISOSTUD_NUM = "all",in_name=None,verbose = 0): 
+        """ 
+    Summary
+        Find all the fits in the archive by YEAR/MONTH/DAY/STUDY_TYPE
+    Args:
+        YEAR       [list or float or int or str("ALL")] : the selected year(s)  
+        MONTH      [list or float or int or str("ALL")] : the selected month(s) 
+        DAY        [list or float or int or str("ALL")] : the selected day(s)
+        STUDY_TYPE [str(SIT) or str(COMPO) or str ("DYN") or str("ALL")] : the selected study type(s) 
+        """
+        path_l2 = Path(L2_folder)
+        selected_fits = [] 
+        searching_paths = []
+        if True:#reading years
+            if type(YEAR) in [int,float]:
+                years = [YEAR]
+            elif type(YEAR) in  (list,np.ndarray):
+                years = np.array(YEAR)
+            elif YEAR=="All":
+                years = np.array([i for i in range(2018,2030)])
+            else:
+                raise ValueError("YEAR should be an integer, a list, or a string of value \"all\" not {}".format(type(YEAR))) 
+        if True:#reading months
+            if type(MONTH) in [int,float]:
+                months = [MONTH]
+            elif type(MONTH) in  (list,np.ndarray):
+                months = np.array(MONTH)
+            elif MONTH=="All":
+                months = np.array([i for i in range(1,13)])
+            else:
+                raise ValueError("MONTH shuld be an integer, a list, or a string of value \"all\" not {}".format(type(MONTH))) 
+        if True:#reading days
+            if type(DAY) in [int,float]:
+                days = [DAY]
+            elif type(DAY) in  (list,np.ndarray):
+                days = np.array(DAY)
+            elif DAY=="All":
+                days = np.array([i for i in range(1,32)])
+            else:
+                raise ValueError("DAY shuld be an integer, a list, or a string of value \"all\" not {}".format(type(DAY))) 
+        for day in days:#combining the path to the targeted folders
+            for month in months:
+                for year in years:
+                    searching_paths.append(path_l2/f"{year}"/f"{month:02d}"/f"{day:02d}")       
+        if verbose >= 2:#for seeing what are the paths chosen 
+            for i in searching_paths: print(i)
+        for path in searching_paths:#combining the path to the targeted set and filtring study type
+            if Path.exists(path):
+                available_fits = os.listdir(path)
+                for fits in available_fits:
+                    if True: #selection by type is in here
+                        _sample = path/fits
+                        # print(_sample)
+                        if type(in_name)!=type(None):
+                            if type(in_name) == str:in_name = [in_name]
+                            for name in in_name:
+                                if name in str(fits): selected_fits.append(_sample)
+                        else:    
+                            data = fits_reader.open(_sample)
+                            # PURPOSE = data[0].header['PURPOSE']
+                            STUDY     = data[0].header['STUDY']
+                            STP       = data[0].header['STP']
+                            SOOPNAME  = data[0].header['SOOPNAME']
+                            MISOSTUD  = data[0].header['MISOSTUD']
+                            
+                            if True:
+                                GOOD_STP = False
+                                if (STP_NUM in ["ALL","all"]):
+                                    GOOD_STP = True
+                                elif (int(STP) == int(STP_NUM) ):
+                                    GOOD_STP = True
+                            if True: 
+                                GOOD_MISOSTUD = False
+                                if (MISOSTUD_NUM in ["ALL","all"]):
+                                    GOOD_MISOSTUD = True
+                                elif (int(MISOSTUD) == int(MISOSTUD_NUM) ):
+                                    GOOD_MISOSTUD = True
+                                
+                            if (
+                                (STD_TYP in ["ALL","all"]) or (STD_TYP in STUDY        )
+                                and
+                                GOOD_STP
+                                and
+                                (SOOP_NAM in ["ALL","all"]) or (SOOP_NAM in SOOPNAME   )
+                                ): 
+                            
+                                selected_fits.append(_sample)
+        if verbose >= 1:
+            for i in (selected_fits): print(i)
+        return(selected_fits)

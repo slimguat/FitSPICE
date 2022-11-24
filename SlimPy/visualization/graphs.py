@@ -10,7 +10,8 @@ from astropy.visualization import SqrtStretch, AsymmetricPercentileInterval, Ima
 
 from ..utils.utils import gen_velocity
 
-def _plot_window_Miho(spectrum_axis: np.array,
+def _plot_window_Miho(
+                spectrum_axis: np.array,
                 window: np.ndarray,
                 paramlist:np.ndarray,
                 quentity: list,
@@ -33,7 +34,7 @@ def _plot_window_Miho(spectrum_axis: np.array,
                 visualize_saturation = True,
                 **kwargs):
     w = window;q = quentity;p=paramlist;ws=window_size;sa=spectrum_axis
-    cmap_doppler = "twilight_shifted" 
+    cmap_doppler = "RdBu_r" 
     if "raster" in kwargs:
         raster = kwargs["raster"] 
 
@@ -112,12 +113,22 @@ def _plot_window_Miho(spectrum_axis: np.array,
             minmax = {"interval" : AsymmetricPercentileInterval(1, 99)} 
             if type(max_I)!=type(None) and type(min_I)!=type(None):
                 minmax= {"vmin" : min_I,"vmax" : max_I} 
+            
+            try: 
+                norm = ImageNormalize(p[i,t],**minmax,stretch=SqrtStretch())
+            except: pass
+            
+            try:
+                if "raster" in kwargs:
+                    im = axis[_c,0].pcolormesh(All_ang_lon,All_ang_lat,p[i,t], norm=norm,cmap="magma")
+                else:
+                    im = axis[_c,0].imshow(p[i,t], aspect= "auto",origin="lower", norm=norm,cmap="magma")
+            except: 
+                if "raster" in kwargs:
+                    im = axis[_c,0].pcolormesh(All_ang_lon,All_ang_lat,p[i,t],cmap="magma")
+                else:
+                    im = axis[_c,0].imshow(p[i,t], aspect= "auto",origin="lower",cmap="magma")
                 
-            norm = ImageNormalize(p[i,t],**minmax,stretch=SqrtStretch())
-            if "raster" in kwargs:
-                im = axis[_c,0].pcolormesh(All_ang_lon,All_ang_lat,p[i,t], norm=norm,cmap="magma")
-            else:
-                im = axis[_c,0].imshow(p[i,t], aspect= "auto",origin="lower", norm=norm,cmap="magma")
             axis[_c,0].set_title('Intensity ($W \cdot m^{-2} \cdot sr^{-1}\cdot nm^{-1}$)' )
             axis[_c,0].set_xlabel('Helioprojective longitude \n (arcsec)' )
             axis[_c,0].set_ylabel('Helioprojective latitude \n (arcsec)' )
@@ -177,7 +188,7 @@ def _plot_window_Miho(spectrum_axis: np.array,
                 data_conv = convlist[t,:,:].copy()
                 #designing colormap -> color choice and their number
                 vals = (np.unique(data_conv)).astype(np.int8)
-                print(vals)
+                # print(vals)
                 # print("vals",vals)
                 N = len(vals)
                 # print(int(N**(1/3)),N**(1/3),'int(N**(1/3)),N**(1/3)')
@@ -661,8 +672,8 @@ def plot_summary_Miho_1line(spectrum_axis: np.array,
                 window_size: np.ndarray =np.array([[0,-1],[0,-1]]),
                 t: int = 0,
                 segmentation = None,
-                save = False,
-                filename = "./imgs/res.jpg",
+                save = True,
+                filename = "./imgs/res.pdf",
                 quite_sun:np.ndarray = np.array([0,-1,0,-1]),
                 min_I = None,
                 max_I = None,
@@ -672,229 +683,271 @@ def plot_summary_Miho_1line(spectrum_axis: np.array,
                 max_s = None,
                 min_B = None,
                 max_B = None,
-                visualize_saturation = True,
+                visualize_saturation = False,
                 **kwargs):
-    w = window;q = quentity;p=paramlist;ws=window_size;sa=spectrum_axis
-    cmap_doppler = "twilight_shifted" 
-    
-    raster = kwargs["raster"] 
-    ang_lat = raster.celestial.data[ws[0,0]:ws[0,1],ws[1,0]:ws[1,1]].lat.deg
-    ang_lon = raster.celestial.data[ws[0,0]:ws[0,1],ws[1,0]:ws[1,1]].lon.deg
-    All_ang_lat = raster.celestial.data.lat.deg
-    All_ang_lon = raster.celestial.data.lon.deg
-    
-    ang_lat2 = ang_lat.copy()
-    ang_lon2 = ang_lon.copy()
-    All_ang_lat2 = All_ang_lat.copy()
-    All_ang_lon2 = All_ang_lon.copy()
-    
-    All_ang_lon2[All_ang_lon<=180] =  All_ang_lon[All_ang_lon<=180]     *3600
-    All_ang_lon2[All_ang_lon> 180] = (All_ang_lon[All_ang_lon>180 ]-360)*3600
-    
-    ang_lon2[ang_lon<=180] = ang_lon[ang_lon<=180] *3600
-    ang_lon2[ang_lon>180] = (ang_lon[ang_lon>180]-360 )*3600
-    
-    All_ang_lat2[All_ang_lat<=180] = All_ang_lat[All_ang_lat<=180] *3600
-    All_ang_lat2[All_ang_lat>180] = (All_ang_lat[All_ang_lat>180])*3600
-    
-    ang_lat2[ang_lat<=180] = ang_lat[ang_lat<=180] *3600
-    ang_lat2[ang_lat>180] = (ang_lat[ang_lat>180] )*3600
-    ang_lat = ang_lat2.copy()
-    ang_lon = ang_lon2.copy()
-    All_ang_lat = All_ang_lat2.copy()
-    All_ang_lon = All_ang_lon2.copy()
+    if True:
+        w = window;q = quentity;p=paramlist;ws=window_size;sa=spectrum_axis
+        cmap_doppler = "twilight_shifted" 
         
-    
-    
-    if type(quite_sun) == np.ndarray:
-        qs2 = quite_sun.copy()
+        raster = kwargs["raster"] 
+        # ang_lat = raster.celestial.data[ws[0,0]:ws[0,1],ws[1,0]:ws[1,1]].lat.deg
+        # ang_lon = raster.celestial.data[ws[0,0]:ws[0,1],ws[1,0]:ws[1,1]].lon.deg
+        ang_lat = raster.celestial.data[:,:].lat.deg
+        ang_lon = raster.celestial.data[:,:].lon.deg
+        All_ang_lat = raster.celestial.data.lat.deg
+        All_ang_lon = raster.celestial.data.lon.deg
         
-        quite_sun = quite_sun.copy()
-        # quite_sun[0] = quite_sun[0] - window_size[1,0]
-        # quite_sun[2] = quite_sun[2] - window_size[0,0]
+        ang_lat2 = ang_lat.copy()
+        ang_lon2 = ang_lon.copy()
+        All_ang_lat2 = All_ang_lat.copy()
+        All_ang_lon2 = All_ang_lon.copy()
+        
+        All_ang_lon2[All_ang_lon<=180] =  All_ang_lon[All_ang_lon<=180]     *3600
+        All_ang_lon2[All_ang_lon> 180] = (All_ang_lon[All_ang_lon>180 ]-360)*3600
+        
+        ang_lon2[ang_lon<=180] = ang_lon[ang_lon<=180] *3600
+        ang_lon2[ang_lon>180] = (ang_lon[ang_lon>180]-360 )*3600
+        
+        All_ang_lat2[All_ang_lat<=180] = All_ang_lat[All_ang_lat<=180] *3600
+        All_ang_lat2[All_ang_lat>180] = (All_ang_lat[All_ang_lat>180])*3600
+        
+        ang_lat2[ang_lat<=180] = ang_lat[ang_lat<=180] *3600
+        ang_lat2[ang_lat>180] = (ang_lat[ang_lat>180] )*3600
+        ang_lat = ang_lat2.copy()
+        ang_lon = ang_lon2.copy()
+        All_ang_lat = All_ang_lat2.copy()
+        All_ang_lon = All_ang_lon2.copy()
+            
         
         
-        if quite_sun[1] == -1:
-            if window_size[1,1] == -1: quite_sun[1] = window.shape[3] #- window_size[1,0]
-            else: quite_sun[1] = window_size[1,1]# - window_size[1,0]
-        else: pass #quite_sun[1] = quite_sun[1] - window_size[1,0]
-        if quite_sun[3] == -1:
-            if window_size[0,1] == -1: quite_sun[3] = window.shape[2] #- window_size[0,0]
-            else: quite_sun[3] = window_size[0,1] #- window_size[0,0]
-        else: quite_sun[3] = quite_sun[3] #- window_size[0,0]  
-        qs = qs2.copy()
-        QS_up_leftx     =  All_ang_lon[qs[3],qs[0]] + (All_ang_lon[qs[3],qs[0]]  - (All_ang_lon[qs[3]  ,qs[0]+1]) )/2 
-        QS_up_lefty     =  All_ang_lat[qs[3],qs[0]] - (All_ang_lat[qs[3],qs[0]]  - (All_ang_lat[qs[3]-1,qs[0]  ]) )/2
-        QS_up_rightx    =  All_ang_lon[qs[3],qs[1]] - (All_ang_lon[qs[3],qs[1]]  - (All_ang_lon[qs[3]  ,qs[1]-1]) )/2
-        QS_up_righty    =  All_ang_lat[qs[3],qs[1]] - (All_ang_lat[qs[3],qs[1]]  - (All_ang_lat[qs[3]-1,qs[1]  ]) )/2
-        QS_down_rightx  =  All_ang_lon[qs[2],qs[1]] - (All_ang_lon[qs[2],qs[1]]  - (All_ang_lon[qs[2]  ,qs[1]-1]) )/2
-        QS_down_righty  =  All_ang_lat[qs[2],qs[1]] + (All_ang_lat[qs[2],qs[1]]  - (All_ang_lat[qs[2]+1,qs[1]  ]) )/2
-        QS_down_leftx   =  All_ang_lon[qs[2],qs[0]] + (All_ang_lon[qs[2],qs[0]]  - (All_ang_lon[qs[2]  ,qs[0]+1]) )/2
-        QS_down_lefty   =  All_ang_lat[qs[2],qs[0]] + (All_ang_lat[qs[2],qs[0]]  - (All_ang_lat[qs[2]+1,qs[0]  ]) )/2
-        # print(qs[3],qs[0],QS_up_leftx)
-        ws = window_size
-        WS_up_leftx     = All_ang_lon[ws[0,1],ws[1,0]] + (All_ang_lon[ws[0,1],ws[1,0]]  - (All_ang_lon[ws[0,1]  ,ws[1,0]+1]) )/2
-        WS_up_lefty     = All_ang_lat[ws[0,1],ws[1,0]] - (All_ang_lat[ws[0,1],ws[1,0]]  - (All_ang_lat[ws[0,1]-1,ws[1,0]  ]) )/2
-        WS_up_rightx    = All_ang_lon[ws[0,1],ws[1,1]] - (All_ang_lon[ws[0,1],ws[1,1]]  - (All_ang_lon[ws[0,1]  ,ws[1,1]-1]) )/2
-        WS_up_righty    = All_ang_lat[ws[0,1],ws[1,1]] - (All_ang_lat[ws[0,1],ws[1,1]]  - (All_ang_lat[ws[0,1]-1,ws[1,1]  ]) )/2
-        WS_down_rightx  = All_ang_lon[ws[0,0],ws[1,1]] - (All_ang_lon[ws[0,0],ws[1,1]]  - (All_ang_lon[ws[0,0]  ,ws[1,1]-1]) )/2
-        WS_down_righty  = All_ang_lat[ws[0,0],ws[1,1]] + (All_ang_lat[ws[0,0],ws[1,1]]  - (All_ang_lat[ws[0,0]+1,ws[1,1]  ]) )/2
-        WS_down_leftx   = All_ang_lon[ws[0,0],ws[1,0]] + (All_ang_lon[ws[0,0],ws[1,0]]  - (All_ang_lon[ws[0,0]  ,ws[1,0]+1]) )/2
-        WS_down_lefty   = All_ang_lat[ws[0,0],ws[1,0]] + (All_ang_lat[ws[0,0],ws[1,0]]  - (All_ang_lat[ws[0,0]+1,ws[1,0]  ]) )/2
-    elif type(quite_sun) == float:
-        pass
-    else: raise Exception("the algorithm accepts only np.ndarray or floats")
-    
-    def sub_q(Q:list)->list:
-        sub_q = []
-        i_b1 = 0
-        i_b2 = 0
-        for i in range(len(Q)):
-            if Q[i] == "B":
-                i_b2 = i+1
-                sub_q.append([i_b1,i_b2]) 
-                i_b1 = i_b2
-        return sub_q
-    mean_pos = []
-    _q = sub_q(q)
-    _c = -1; _nl = int((len(q)-len(_q))/3)+len(_q)+1
-    # conv_c = 0
-    plt.rcParams.update({'font.size': 30})
-    fig = plt.figure(figsize=(24,24))
-    gs0 = fig.add_gridspec(2,2)
-    gs1 = gs0[0,0].subgridspec(2,1)
-    gs2 = gs1[1].subgridspec(1,2)
-    
-    # fig, axis = plt.subplots(2,2, figsize=(24,8.2*_nl))
-    
-    for i in range(len(q)):
-        if q[i] == "I":
-            _c += 1
-            if _c>0: raise Exception('you called the function plot_summary_Miho_1line it is for ONE line not for multiple lines DUMBASS!!! ')
-            axI = fig.add_subplot(gs0[0,1])
-            minmax = {"interval" : AsymmetricPercentileInterval(1, 99)} 
-            if type(max_I)!=type(None) and type(min_I)!=type(None):
-                minmax= {"vmin" : min_I,"vmax" : max_I} 
+        if type(quite_sun) == np.ndarray:
+            qs2 = quite_sun.copy()
+            
+            quite_sun = quite_sun.copy()
+            # quite_sun[0] = quite_sun[0] - window_size[1,0]
+            # quite_sun[2] = quite_sun[2] - window_size[0,0]
+            
+            
+            if quite_sun[1] == -1:
+                if window_size[1,1] == -1: quite_sun[1] = window.shape[3] #- window_size[1,0]
+                else: quite_sun[1] = window_size[1,1]# - window_size[1,0]
+            else: pass #quite_sun[1] = quite_sun[1] - window_size[1,0]
+            if quite_sun[3] == -1:
+                if window_size[0,1] == -1: quite_sun[3] = window.shape[2] #- window_size[0,0]
+                else: quite_sun[3] = window_size[0,1] #- window_size[0,0]
+            else: quite_sun[3] = quite_sun[3] #- window_size[0,0]  
+            qs = qs2.copy()
+            QS_up_leftx     =  All_ang_lon[qs[3],qs[0]] + (All_ang_lon[qs[3],qs[0]]  - (All_ang_lon[qs[3]  ,qs[0]+1]) )/2 
+            QS_up_lefty     =  All_ang_lat[qs[3],qs[0]] - (All_ang_lat[qs[3],qs[0]]  - (All_ang_lat[qs[3]-1,qs[0]  ]) )/2
+            QS_up_rightx    =  All_ang_lon[qs[3],qs[1]] - (All_ang_lon[qs[3],qs[1]]  - (All_ang_lon[qs[3]  ,qs[1]-1]) )/2
+            QS_up_righty    =  All_ang_lat[qs[3],qs[1]] - (All_ang_lat[qs[3],qs[1]]  - (All_ang_lat[qs[3]-1,qs[1]  ]) )/2
+            QS_down_rightx  =  All_ang_lon[qs[2],qs[1]] - (All_ang_lon[qs[2],qs[1]]  - (All_ang_lon[qs[2]  ,qs[1]-1]) )/2
+            QS_down_righty  =  All_ang_lat[qs[2],qs[1]] + (All_ang_lat[qs[2],qs[1]]  - (All_ang_lat[qs[2]+1,qs[1]  ]) )/2
+            QS_down_leftx   =  All_ang_lon[qs[2],qs[0]] + (All_ang_lon[qs[2],qs[0]]  - (All_ang_lon[qs[2]  ,qs[0]+1]) )/2
+            QS_down_lefty   =  All_ang_lat[qs[2],qs[0]] + (All_ang_lat[qs[2],qs[0]]  - (All_ang_lat[qs[2]+1,qs[0]  ]) )/2
+            # print(qs[3],qs[0],QS_up_leftx)
+            ws = window_size
+            WS_up_leftx     = All_ang_lon[ws[0,1],ws[1,0]] + (All_ang_lon[ws[0,1],ws[1,0]]  - (All_ang_lon[ws[0,1]  ,ws[1,0]+1]) )/2
+            WS_up_lefty     = All_ang_lat[ws[0,1],ws[1,0]] - (All_ang_lat[ws[0,1],ws[1,0]]  - (All_ang_lat[ws[0,1]-1,ws[1,0]  ]) )/2
+            WS_up_rightx    = All_ang_lon[ws[0,1],ws[1,1]] - (All_ang_lon[ws[0,1],ws[1,1]]  - (All_ang_lon[ws[0,1]  ,ws[1,1]-1]) )/2
+            WS_up_righty    = All_ang_lat[ws[0,1],ws[1,1]] - (All_ang_lat[ws[0,1],ws[1,1]]  - (All_ang_lat[ws[0,1]-1,ws[1,1]  ]) )/2
+            WS_down_rightx  = All_ang_lon[ws[0,0],ws[1,1]] - (All_ang_lon[ws[0,0],ws[1,1]]  - (All_ang_lon[ws[0,0]  ,ws[1,1]-1]) )/2
+            WS_down_righty  = All_ang_lat[ws[0,0],ws[1,1]] + (All_ang_lat[ws[0,0],ws[1,1]]  - (All_ang_lat[ws[0,0]+1,ws[1,1]  ]) )/2
+            WS_down_leftx   = All_ang_lon[ws[0,0],ws[1,0]] + (All_ang_lon[ws[0,0],ws[1,0]]  - (All_ang_lon[ws[0,0]  ,ws[1,0]+1]) )/2
+            WS_down_lefty   = All_ang_lat[ws[0,0],ws[1,0]] + (All_ang_lat[ws[0,0],ws[1,0]]  - (All_ang_lat[ws[0,0]+1,ws[1,0]  ]) )/2
+        elif type(quite_sun) == float:
+            pass
+        else: raise Exception("the algorithm accepts only np.ndarray or floats")
+        
+        def sub_q(Q:list)->list:
+            sub_q = []
+            i_b1 = 0
+            i_b2 = 0
+            for i in range(len(Q)):
+                if Q[i] == "B":
+                    i_b2 = i+1
+                    sub_q.append([i_b1,i_b2]) 
+                    i_b1 = i_b2
+            return sub_q
+        mean_pos = []
+        _q = sub_q(q)
+        _c = -1; _nl = int((len(q)-len(_q))/3)+len(_q)+1
+        # conv_c = 0
+        mpl.style.use('classic')
+        plt.rcParams.update({'font.size': 30,
+                             "figure.facecolor"   :"white",
+                             "savefig.facecolor"  :"white",
+                             "axes.facecolor"     :"white",
+                             'text.color'         :"black",
+                             'axes.labelcolor'    :"black",
+                             'xtick.color'        :"black",
+                             'ytick.color'        :"black",
+                             })
+        fig = plt.figure(figsize=(24,24))
+        gs0 = fig.add_gridspec(2,2)
+        gs1 = gs0[0,0].subgridspec(2,1)
+        gs2 = gs1[1].subgridspec(1,2)
+        
+        # fig, axis = plt.subplots(2,2, figsize=(24,8.2*_nl))
+        
+        for i in range(len(q)):
+            if q[i] == "I":
+                _c += 1
+                if _c>0: raise Exception('you called the function plot_summary_Miho_1line it is for ONE line not for multiple lines DUMBASS!!! ')
+                axI = fig.add_subplot(gs0[0,1])
+                minmax = {"interval" : AsymmetricPercentileInterval(1, 99)} 
+                if type(max_I)!=type(None) and type(min_I)!=type(None):
+                    minmax= {"vmin" : min_I,"vmax" : max_I} 
+                    
+                norm = ImageNormalize(p[i,t],**minmax,stretch=SqrtStretch())
+                im = axI.pcolormesh(ang_lon,ang_lat,p[i,t], norm=norm,cmap="magma",rasterized=True)
+                axI.set_title('Intensity ($W \cdot m^{-2} \cdot sr^{-1}\cdot nm^{-1}$)' )
+                ymin = np.nanmin([ang_lat[np.logical_not(np.isnan(p[i,t]))]])
+                ymax = np.nanmax([ang_lat[np.logical_not(np.isnan(p[i,t]))]])
+                ylim = [ymin,ymax]
+                xmin = np.nanmin([ang_lon[np.logical_not(np.isnan(p[i,t]))]])
+                xmax = np.nanmax([ang_lon[np.logical_not(np.isnan(p[i,t]))]])
+                xlim = [xmin,xmax]
                 
-            norm = ImageNormalize(p[i,t],**minmax,stretch=SqrtStretch())
-            im = axI.pcolormesh(ang_lon,ang_lat,p[i,t], norm=norm,cmap="magma")
-            axI.set_title('Intensity ($W \cdot m^{-2} \cdot sr^{-1}\cdot nm^{-1}$)' )
-            
-            
-            
-            axI.set_xlabel('Helioprojective longitude \n (arcsec)' )
-            axI.set_ylabel('Helioprojective latitude \n (arcsec)' )
-            axI.set_aspect('equal')
-            plt.colorbar(im,shrink=0.75,ax=axI,extend=  ("both" if visualize_saturation else None))
-            
-        if q[i] == "x": 
-            axx = fig.add_subplot(gs0[1,0])
-            if type(quite_sun)==np.ndarray: mean_x = np.nanmean(p[i,t,quite_sun[2]-ws[0,0]:quite_sun[3]+ws[0,0],quite_sun[0]-ws[1,0]:quite_sun[1]-ws[1,0]])
-            else: mean_x = quite_sun
-            mean_pos.append(mean_x)
-            cmap = plt.get_cmap(cmap_doppler).copy()
-            cmap.set_extremes(under='yellow', over='green') if visualize_saturation else 0
-            
-            #print("Calculated mean: ", mean_x)
-            im = axx.pcolormesh(ang_lon,ang_lat,(p[i,t]-mean_x)/mean_x*3*10**5, vmin=min_x,vmax=max_x ,cmap=cmap)
-            
-            
-            axx.set_title('Doppler (km/s)')
-            axx.set_xlabel('Helioprojective longitude \n (arcsec)' )
-            axx.set_ylabel('Helioprojective latitude \n (arcsec)' )
-            axx.set_aspect('equal')
-            plt.colorbar(im,shrink=0.75,ax=axx,extend=  ("both" if visualize_saturation else None))
-        if q[i] == "s":
-            axs = fig.add_subplot(gs0[1,1])
-            cmap = plt.get_cmap('hot').copy()
-            cmap.set_extremes(under='green', over='violet') if visualize_saturation else 0
-            im = axs.pcolormesh(ang_lon,ang_lat,p[i,t],cmap=cmap,vmax = max_s, vmin = min_s)
-            
-            
-            axs.set_title('$\sigma$ ($\AA$)')
-            axs.set_xlabel('Helioprojective longitude \n (arcsec)' )
-            axs.set_ylabel('Helioprojective latitude \n (arcsec)' )
-            axs.set_aspect('equal')
-            plt.colorbar(im,shrink=0.75,ax=axs,extend=  ("both" if visualize_saturation else None))
-            
-       
-    mn = np.nanmean(
-        w[:,
-            :,
-            :,#ws[0,0]:ws[0,1],
-            :#ws[1,0]:ws[1,1]
-        ],
-        axis=(0,1)
-        )   
-    axAI = fig.add_subplot(gs2[0])
-    minmax = {"interval" : AsymmetricPercentileInterval(1, 99)} 
-    if type(max_I)!=type(None) and type(min_I)!=type(None):
-        minmax= {"vmin" : min_I,"vmax" : max_I} 
-    
-    norm = ImageNormalize(mn,**minmax,stretch=SqrtStretch())
-    im = axAI.pcolormesh(All_ang_lon,All_ang_lat,mn,norm=norm,cmap="magma")
-    # axAI.set_aspect('auto')
-    plt.colorbar(im,shrink=0.75,ax=axAI,extend=  ("both" if visualize_saturation else None))
-    
-    axAI.plot([QS_up_leftx,QS_up_rightx,QS_down_rightx,QS_down_leftx,QS_up_leftx],
-                    [QS_up_lefty,QS_up_righty,QS_down_righty,QS_down_lefty,QS_up_lefty],
-                    "o-",
-                    alpha = 1,
-                    color= (0,1,0),lw=5,
-                    label="Selected\nquite region")
-    axAI.plot([WS_up_leftx,WS_up_rightx,WS_down_rightx,WS_down_leftx,WS_up_leftx],
-                    [WS_up_lefty,WS_up_righty,WS_down_righty,WS_down_lefty,WS_up_lefty],
-                    "o-",
-                    alpha = 1,
-                    color= (1,0,0),lw=3,
-                    label="Analysed region")
-    
-    
-
-    axAI.set_title('Average intensity',fontsize = 16)
-    axAI.set_xlabel('Helioprojective longitude \n (arcsec)',fontsize = 16 )
-    axAI.set_ylabel('Helioprojective latitude \n (arcsec)',fontsize = 16 )
-    axAI.set_aspect('equal')
-    axAI.xaxis.set_tick_params(labelsize=16)
-    axAI.yaxis.set_tick_params(labelsize=16)
-    
-    axAS = fig.add_subplot(gs2[1])
-    axAS.step(sa,np.nanmean(
-        w[:,
-            :,
-            ws[0,0]:ws[0,1],
-            ws[1,0]:ws[1,1]
+                axI.set_xlabel('Helioprojective longitude \n (arcsec)' )
+                axI.set_ylabel('Helioprojective latitude \n (arcsec)' )
+                axI.set_ylim(ylim)
+                axI.set_xlim(xlim)
+                axI.set_aspect('equal')
+                axI.xaxis.set_tick_params(rotation=45)
+                
+                cb =plt.colorbar(im,shrink=0.75,ax=axI,extend=  ("both" if visualize_saturation else None))
+                cb.solids.set_rasterized(True)
+            if q[i] == "x": 
+                axx = fig.add_subplot(gs0[1,0])
+                if type(quite_sun)==np.ndarray: mean_x = np.nanmean(p[i,t,quite_sun[2]:quite_sun[3],quite_sun[0]:quite_sun[1]])
+                else: mean_x = quite_sun
+                mean_pos.append(mean_x)
+                cmap = plt.get_cmap(cmap_doppler).copy()
+                cmap.set_extremes(under='yellow', over='green') if visualize_saturation else 0
+                
+                #print("Calculated mean: ", mean_x)
+                im = axx.pcolormesh(ang_lon,ang_lat,(p[i,t]-mean_x)/mean_x*3*10**5, vmin=min_x,vmax=max_x ,cmap=cmap,rasterized=True)
+                
+                
+                axx.set_title('Doppler (km/s)')
+                axx.set_xlabel('Helioprojective longitude \n (arcsec)' )
+                axx.set_ylabel('Helioprojective latitude \n (arcsec)' )
+                axx.set_ylim(ylim)
+                axx.set_xlim(xlim)
+                
+                axx.set_aspect('equal')
+                axx.xaxis.set_tick_params(rotation=45)
+                
+                cb = plt.colorbar(im,shrink=0.75,ax=axx,extend=  ("both" if visualize_saturation else None))
+                cb.solids.set_rasterized(True)
+            if q[i] == "s":
+                axs = fig.add_subplot(gs0[1,1])
+                cmap = plt.get_cmap('hot').copy()
+                cmap.set_extremes(under='green', over='violet') if visualize_saturation else 0
+                im = axs.pcolormesh(ang_lon,ang_lat,p[i,t],cmap=cmap,vmax = max_s, vmin = min_s,rasterized=True)
+                
+                
+                axs.set_title('$\sigma$ ($\AA$)')
+                axs.set_xlabel('Helioprojective longitude \n (arcsec)' )
+                axs.set_ylabel('Helioprojective latitude \n (arcsec)' )
+                axs.set_ylim(ylim)
+                axs.set_xlim(xlim)
+                
+                axs.set_aspect('equal')
+                axs.xaxis.set_tick_params(rotation=45)
+                
+                cb = plt.colorbar(im,shrink=0.75,ax=axs,extend=  ("both" if visualize_saturation else None))
+                cb.solids.set_rasterized(True)
+                
+        
+        mn = np.nanmean(
+            w[:,
+                :,
+                :,#ws[0,0]:ws[0,1],
+                :#ws[1,0]:ws[1,1]
             ],
-        axis=(0,2,3)
-        ))
-       
-    # print(mean_pos)
-    # print(sa)
-    for x in mean_pos:
-        axAS.axvline(x,ls=':',label="line: {:02d}".format(mean_pos.index(x)))
-    axAS.legend(fontsize=16)
-    axAS.set_title("Average spectrum",fontsize = 16)
-    axAS.set_ylabel('Intensity',fontsize = 16 )
-    axAS.set_xlabel('Wavelength $(\AA)$',fontsize = 16 )
-    axAS.xaxis.set_tick_params(labelsize=16)
-    axAS.yaxis.set_tick_params(labelsize=16)
-    
-    fig.text(0.08,0.80,suptitle + "\n" + raster.meta["DATE_SUN"][:-4],fontsize=60)
-    if type(segmentation) != type(None):
-        if len(segmentation.shape)!=1:
-            for seg in segmentation:
+            axis=(0,1)
+            )   
+        axAI = fig.add_subplot(gs2[0])
+        minmax = {"interval" : AsymmetricPercentileInterval(1, 99)} 
+        if type(max_I)!=type(None) and type(min_I)!=type(None):
+            minmax= {"vmin" : min_I,"vmax" : max_I} 
+        
+        norm = ImageNormalize(mn,**minmax,stretch=SqrtStretch())
+        im = axAI.pcolormesh(All_ang_lon,All_ang_lat,mn,norm=norm,cmap="magma",rasterized=True)
+        # axAI.set_aspect('auto')
+        axAI.set_ylim(ylim)
+        axAI.set_xlim(xlim)
+        
+        cb = plt.colorbar(im,shrink=0.75,ax=axAI,extend=  ("both" if visualize_saturation else None))
+        cb.solids.set_rasterized(True)
+        cb.ax.tick_params(labelsize=16)
+
+        axAI.plot([QS_up_leftx,QS_up_rightx,QS_down_rightx,QS_down_leftx,QS_up_leftx],
+                        [QS_up_lefty,QS_up_righty,QS_down_righty,QS_down_lefty,QS_up_lefty],
+                        "o-",
+                        alpha = 1,
+                        color= (0,1,0),lw=5,
+                        label="Selected\nquite region")
+        axAI.plot([WS_up_leftx,WS_up_rightx,WS_down_rightx,WS_down_leftx,WS_up_leftx],
+                        [WS_up_lefty,WS_up_righty,WS_down_righty,WS_down_lefty,WS_up_lefty],
+                        "o-",
+                        alpha = 1,
+                        color= (1,0,0),lw=3,
+                        label="Analysed region")
+        
+        
+
+        axAI.set_title('Average intensity',fontsize = 16)
+        axAI.set_xlabel('Helioprojective longitude \n (arcsec)',fontsize = 16 )
+        axAI.set_ylabel('Helioprojective latitude \n (arcsec)',fontsize = 16 )
+        axAI.set_aspect('equal')
+        axAI.xaxis.set_tick_params(labelsize=16)
+        axAI.yaxis.set_tick_params(labelsize=16)
+        axAI.xaxis.set_tick_params(rotation=45)
+        
+        axAS = fig.add_subplot(gs2[1])
+        axAS.step(sa,np.nanmean(
+            w[:,
+                :,
+                ws[0,0]:ws[0,1],
+                ws[1,0]:ws[1,1]
+                ],
+            axis=(0,2,3)
+            ))
+        
+        # print(mean_pos)
+        # print(sa)
+        for x in mean_pos:
+            axAS.axvline(x,ls=':',label="line: {:02d}".format(mean_pos.index(x)))
+        axAS.legend(fontsize=16)
+        axAS.set_title("Average spectrum",fontsize = 16)
+        axAS.set_ylabel('Intensity',fontsize = 16 )
+        axAS.set_xlabel('Wavelength $(\AA)$',fontsize = 16 )
+        axAS.xaxis.set_tick_params(labelsize=16)
+        axAS.xaxis.set_tick_params(labelsize=16)
+        t = axAS.yaxis.get_offset_text()
+        t.set_size(16)
+        t = axAS.xaxis.get_offset_text()
+        t.set_size(16)
+        
+        fig.text(0.08,0.80,suptitle + "\n" + raster.meta["DATE_SUN"][:-4],fontsize=60)
+        if type(segmentation) != type(None):
+            if len(segmentation.shape)!=1:
+                for seg in segmentation:
+                    color = np.random.rand(3)
+                    color = 0.8 * color/np.sqrt(np.sum(color**2))
+                    axAS.axvspan(seg[0], seg[1], alpha=.5,color = color)
+            else:
+                seg = segmentation
                 color = np.random.rand(3)
                 color = 0.8 * color/np.sqrt(np.sum(color**2))
-                axAS.axvspan(seg[0], seg[1], alpha=.5,color = color)
-        else:
-            seg = segmentation
-            color = np.random.rand(3)
-            color = 0.8 * color/np.sqrt(np.sum(color**2))
-            axAS.axvspan(seg[0], seg[1], alpha=0.5,color = color)
-    plt.tight_layout()
-    if save: plt.savefig(filename)
-    
-    return fig,[axI,axx,axs,axAI,axAS],All_ang_lon, All_ang_lat,ang_lon, ang_lat,quite_sun  
+                axAS.axvspan(seg[0], seg[1], alpha=0.5,color = color)
+        plt.tight_layout()
+        if save: plt.savefig(filename)
+        
+        return fig,[axI,axx,axs,axAI,axAS],All_ang_lon, All_ang_lat,ang_lon, ang_lat,quite_sun  
 
 def plot_window(spectrum_axis: np.array,
                 window: np.ndarray,

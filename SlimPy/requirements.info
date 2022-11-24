@@ -1,3 +1,8 @@
 numba
 numpy
 spice_utils
+sunraster
+astropy
+sunpy
+pickle
+multiprocess

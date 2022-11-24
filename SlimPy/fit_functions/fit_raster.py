@@ -7,6 +7,7 @@ import pickle
 from time import sleep
 import multiprocessing as mp
 from multiprocessing import Process,Lock
+from pathlib import PosixPath, Path
 
 from ..spice_utils.ias_spice_utils import utils as spu #look at this later the path isn't set well yet
 from astropy.visualization import SqrtStretch, AsymmetricPercentileInterval, ImageNormalize
@@ -39,32 +40,33 @@ def fit_raster(*args,**kwargs):
     
 #becareful this is in  the testing phase
 def     _fit_raster(
-                path_or_raster          :str or NDCollection,      
-                init_params             :list        ,
-                fit_func                :callable    ,
-                quentities              :list        ,
-                bounds                  :np.array               = np.array([np.nan]) ,
-                window_size             :np.ndarray             = np.array([[500,510],[60,70]]),
-                convolution_function    :callable               = lambda lst:np.zeros_like(lst[:,2])+1,
-                convolution_threshold   :float                  = np.array([0.1,10**-4,0.1,100]),
-                convolution_extent_list :np.array               = np.array([0,1,2,3,4,5]),
-                weights                 :str or None            = None,
-                counter_percent         :float                  = 10,
-                preclean                :bool                   = True,
-                preadjust               :bool                   = True, 
-                save_data               :bool                   = True,
-                save_plot               :bool                   = True,           
-                prefix                  :str                    = None,
-                plot_filename           :str                    = None,
-                quite_sun               :np.array               = np.array([0,-1,0,-1]),
-                data_save_dir           :str                    = "./.p/"  ,
-                plot_save_dir           :str                    = "./imgs/" ,
-                plot_kwargs             :dict                   = {},
-                show_ini_infos          :float                  = True,
-                forced_order            :int                    = None,
-                Jobs                    :dict                   = {"windows":1,"pixels":1},
-                verbose                 :int                    = 0,
-                describe_verbose        :bool                   = True
+                path_or_raster          :str or NDCollection                                           ,                                                            
+                init_params             :list                                                          ,                                                      
+                fit_func                :callable                                                      ,                                                      
+                quentities              :list                                                          ,                                                      
+                bounds                  :np.array               = np.array([np.nan])                   , 
+                window_size             :np.ndarray             = np.array([[500,510],[60,70]])        ,
+                convolution_function    :callable               = lambda lst:np.zeros_like(lst[:,2])+1 ,
+                convolution_threshold   :float                  = np.array([0.1,10**-4,0.1,100])       ,
+                convolution_extent_list :np.array               = np.array([0,1,2,3,4,5])              ,
+                weights                 :str or None            = None                                 ,
+                counter_percent         :float                  = 10                                   ,
+                preclean                :bool                   = True                                 ,
+                preadjust               :bool                   = True                                 , 
+                save_data               :bool                   = True                                 ,
+                save_plot               :bool                   = True                                 ,           
+                prefix                  :str                    = None                                 ,
+                plot_filename           :str                    = None                                 ,
+                data_filename           :str                    = None                                 ,
+                quite_sun               :np.array               = np.array([0,-1,0,-1])                ,
+                data_save_dir           :str                    = "./.p/"                              ,
+                plot_save_dir           :str                    = "./imgs/"                            ,
+                plot_kwargs             :dict                   = {}                                   ,
+                show_ini_infos          :float                  = True                                 ,
+                forced_order            :int                    = None                                 , 
+                Jobs                    :dict                   = {"windows":1,"pixels":1}             ,
+                verbose                 :int                    = 0                                    ,
+                describe_verbose        :bool                   = True                                      
                 ):
     
     if True: #assertion
@@ -85,9 +87,9 @@ def     _fit_raster(
         
     if True: #reading data
         if verbose>1: print("reading data")
-        if type(path_or_raster)==str:
+        if type(path_or_raster) in (str,PosixPath):
             if verbose>1: print(f"data is given as path:  {path_or_raster}")
-            raster = read_spice_l2_fits(path_or_raster)
+            raster = read_spice_l2_fits(str(path_or_raster))
         else: 
             if verbose>1: print(f"data is given as NDCube:{path_or_raster}")
             raster = path_or_raster
@@ -100,10 +102,11 @@ def     _fit_raster(
         if verbose>1: print(f"data imported\nWindows:{KW}\nDATE SUN:{raster[KW[0]].meta['DATE_SUN']}")
         
     if True: #preparing the path names for futur saves 
-        filename,filename_a,filename_b = prepare_filenames(prefix, plot_filename, data_save_dir, plot_save_dir, forced_order,verbose=verbose )
+        filename,filename_a,filename_b = prepare_filenames(prefix, data_filename, plot_filename, data_save_dir, plot_save_dir, forced_order,verbose=verbose )
+        
         if verbose>1: print("Save files:\n{}\n{}\n{}".format(filename,filename_a,filename_b))
         
-    if show_ini_infos and True: #this will be showing initial state of the algotrithm before fitting
+    if show_ini_infos and False: #this will be showing initial state of the algotrithm before fitting
         save_info = True
         dir = "./tmp/"
         if not os.path.isdir(dir):
@@ -217,13 +220,19 @@ def     _fit_raster(
         all_data_con = [] #list of the final results of all the analysis for con data
         
         is_done = []
-        
         for i in range(len(KW)):
             kw = KW[i]
             kw2 = kw.replace("/","_")
             kw2 = kw2.replace(" ","")
             window = raster[kw]
             meta=window.meta
+            
+            ang_lat = raster[kw].celestial.data.lat.arcsec
+            ang_lon = raster[kw].celestial.data.lon.arcsec
+            ang_lon[ang_lon>180*3600] -= 360*3600 
+            ang_lat[ang_lat>180*3600] -= 360*3600 
+            lat_pixel_size= abs(np.nanmean(ang_lat[1:,:]-ang_lat[:-1,:]))
+            lon_pixel_size= abs(np.nanmean(ang_lon[:,1:]-ang_lon[:,:-1]))
             
             if True: #check whether data already exists
                 if verbose> -1: print("checking for the file ",filename.format(i,kw2,window.meta["DATE_SUN"]))
@@ -284,6 +293,8 @@ def     _fit_raster(
                             'meta'                   : meta,
                             'init_params'            : sub_init_params,
                             'fit_func'               : fit_func,
+                            'lat_pixel_size'         : lat_pixel_size, 
+                            'lon_pixel_size'         : lon_pixel_size, 
                             'bounds'                 : bounds if len(bounds.shape)==1 else bounds[i],
                             'window_size'            : window_size,
                             # 'adaptive'             : adaptive, It's always adaptive
@@ -312,25 +323,20 @@ def     _fit_raster(
                 all_shmm_con.append(0)
     
     if True: #Starting analysis
+        last_joined_i = -1
         for i,p in enumerate(Processes):
-            last_joined_i = -1
             if not is_done[i]:
-                JobNum = (i+1)%Jobs["windows"]+1
+                JobNum = (i+1)%Jobs["windows"]
                 if verbose>1: print(f"Starting process job { JobNum } on raster fits")
-                print("loop 01")
                 p.start()
                 if ((i+1)%Jobs["windows"]==0 or i+1==len(Processes)): #to run only njobs for windows not all
-                    print("loop 02")
-                    for j in range(last_joined_i+1,i):
-                        print("loop 03")
+                    for j in range(last_joined_i+1,i+1):
+                        # print("is_done;",is_done[i]," i=",i," j=",j," last_joined_i",last_joined_i)
                         if is_done[j]: continue
-                        print("loop 04")
-                        print(f"Checking the statues of the memory share\nBefore filling the raster_fit parmaeter list (How many non-nans?): {np.where(np.logical_not(np.isnan(all_data_par[j])))}")
                         Processes[j].join()
                         all_data_par[j] = np.ndarray(shape = all_data_par[j].shape,buffer=all_shmm_par[j].buf)  
                         all_data_cov[j] = np.ndarray(shape = all_data_cov[j].shape,buffer=all_shmm_cov[j].buf)  
                         all_data_con[j] = np.ndarray(shape = all_data_con[j].shape,buffer=all_shmm_con[j].buf)
-                        print(f"Checking the statues of the memory share\nAfter filling the raster_fit parmaeter list (How many non-nans?):  {np.where(np.logical_not(np.isnan(all_data_par[j])))}")
                         
                         if save_data:   
                             kw = KW[j]
@@ -347,24 +353,27 @@ def     _fit_raster(
                             #these maxis work only with DYNamics of 2/04
                             maxI = np.array([0.80,2.00,10.0,60.0,25.0,30.0   ])
                             maxB = np.array([0.08,1.50,0.60,2.00,1.50,2.00  ])
-                            _plot_window_Miho(
-                                        (raster[kw].spectral_axis).astype(float)*10**10,
-                                        (raster[kw].data).astype(float),
-                                        paramlist=all_data_par[j],
-                                        quentity =quentities[j],
-                                        convlist =all_data_con[j],
-                                        suptitle =kw,
-                                        window_size=window_size,
-                                        quite_sun=quite_sun,
-                                        save=save_plot,
-                                        filename=filename_a.format(i,kw2,window.meta["DATE_SUN"]),
-                                        min_x=-80,max_x=80,
-                                        min_I=0,max_I=maxI[j],
-                                        min_s=0.3,max_s=0.6,
-                                        min_B=0,max_B=maxB[j],
-                                        raster=raster[kw],
-                                        visualize_saturation = False)
+                            try:
+                                _plot_window_Miho(
+                                            (raster[kw].spectral_axis).astype(float)*10**10,
+                                            (raster[kw].data).astype(float),
+                                            paramlist=all_data_par[j],
+                                            quentity =quentities[j],
+                                            convlist =all_data_con[j],
+                                            suptitle =kw,
+                                            window_size=window_size,
+                                            quite_sun=quite_sun,
+                                            save=save_plot,
+                                            filename=filename_a.format(i,kw2,window.meta["DATE_SUN"]),
+                                            # min_x=-80,max_x=80,
+                                            # min_I=0,max_I=maxI[j],
+                                            # min_s=0.3,max_s=0.6,
+                                            # min_B=0,max_B=maxB[j],
+                                            raster=raster[kw],
+                                            visualize_saturation = False)
+                            except:pass
                     last_joined_i = i
+                    
     if verbose>-1: print(f'The raster is fitted for the Date: {raster[KW[0]][0].meta["DATE_SUN"]}')
     for i in range(len(KW)):#ctype to python getting data in the ight type and shape
         kw = KW[i]
@@ -411,6 +420,8 @@ def task_fit_window(x,
                         quentities,
                         fit_func:callable,
                         bounds:np.ndarray=np.array([np.nan]),
+                        lat_pixel_size:float   = 1,
+                        lon_pixel_size:float   = 1,
                         window_size:np.ndarray = np.array([[210,800],[0,-1]]),
                         # adaptive:bool = True, It's always adaptif
                         convolution_function :callable   = lambda lst:np.zeros_like(lst[:,2])+1,
@@ -437,6 +448,8 @@ def task_fit_window(x,
                     quentities=quentities,
                     fit_func = fit_func,
                     bounds=bounds,
+                    lat_pixel_size=lat_pixel_size,
+                    lon_pixel_size=lon_pixel_size,
                     window_size=window_size,
                     meta=meta,
                     #  adaptive = adaptive, It's always adaptive
@@ -688,14 +701,13 @@ def multi_windows_fit(raster,
         
         
         ang_lat = window.celestial.data[window_size[0,0]:window_size[0,1],
-                                        window_size[1,0]:window_size[1,1]].lat.deg
+                                        window_size[1,0]:window_size[1,1]].lat.arcsec
         ang_lon = window.celestial.data[window_size[0,0]:window_size[0,1],
-                                        window_size[1,0]:window_size[1,1]].lon.deg
-        if (ang_lon<10).any() and (ang_lon>350).any():
-            ang_lon[ang_lon<=180] = ang_lon[ang_lon<=180]+360 
-        if (ang_lat<10).any() and (ang_lat>350).any():
-            ang_lat[ang_lat<=180] = ang_lat[ang_lat<=180]+360 
-        
+                                        window_size[1,0]:window_size[1,1]].lon.arcsec
+        ang_lon[ang_lon>180*3600] -= 360*3600 
+        ang_lat[ang_lat>180*3600] -= 360*3600 
+        lat_pixel_size= abs(np.nanmean(ang_lat[1:,:]-ang_lat[:-1,:]))
+        lon_pixel_size= abs(np.nanmean(ang_lon[:,1:]-ang_lon[:,:-1]))
         init_params2 = init_params[i]
         if len(bounds.shape)!=1:
             bounds2 = bounds[i]
@@ -757,10 +769,10 @@ def multi_windows_fit(raster,
                         quite_sun=quite_sun,
                         save=save_plot,
                         filename=filename_a.format(i,kw2,window.meta["DATE_SUN"]),
-                        min_x=-80,max_x=80,
-                        min_I=0,max_I=maxI[i],
-                        min_s=0.3,max_s=0.6,
-                        min_B=0,max_B=maxB[i],
+                        # min_x=-80,max_x=80,
+                        # min_I=0,max_I=maxI[i],
+                        # min_s=0.3,max_s=0.6,
+                        # min_B=0,max_B=maxB[i],
                         raster=raster[kw],
                         visualize_saturation = False)
             plot_error(

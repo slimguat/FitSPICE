@@ -339,58 +339,24 @@ def task_fit_pixel(x:np.ndarray,
                                                 )
             if np.isnan(last_par).all():
                 best_con = convolution_extent_list[i_ad]
-                
-            # elif ((np.sqrt(np.diag(last_cov)))/last_par < convolution_threshold).all():
-                # best_cov   = last_cov
-                # best_par   = last_par
-                # best_con   = convolution_extent_list[i_ad]
-                # break
-                #New
-                
+            elif ((np.sqrt(np.diag(last_cov)))/last_par < convolution_threshold).all():
+                best_cov   = last_cov
+                best_par   = last_par
+                best_con   = convolution_extent_list[i_ad]
+                break
             else:
                 if (np.isnan(best_par)).all():
                     best_cov   = last_cov
                     best_par   = last_par
                     best_con   = convolution_extent_list[i_ad]
-                
-                # elif np.nansum(
-                #         (np.sqrt(np.diag(last_cov)))/last_par/convolution_threshold
-                #     )<np.nansum(
-                #         (np.sqrt(np.diag(best_cov)))/best_par/convolution_threshold
-                #                                                                     ):
-                #     best_cov = last_cov
-                #     best_par = last_par
-                #     best_con = convolution_extent_list[i_ad]
-                
-                #NEW TO BE VERIFIED
-                else:
-                    all_good=True
-                    for i in range(len(best_par)//3):
-                        if          not ((np.sqrt(np.diag(last_cov)))/last_par < convolution_threshold)[i*3:(i+1)*3].all():
-                            if         (((np.sqrt(np.diag(best_cov)))/best_par < convolution_threshold)[i*3:(i+1)*3].all()):
-                                best_cov[i*3:(i+1)*3,i*3:(i+1)*3] = last_cov[i*3:(i+1)*3,i*3:(i+1)*3]
-                                best_par[i*3:(i+1)*3] = last_par[i*3:(i+1)*3]
-                                
-                                best_cov[-1,-1] = last_cov[-1,-1]
-                                best_par[-1]    = last_par[-1]
-                            
-                            elif np.nansum(
-                                    ((np.sqrt(np.diag(last_cov)))/last_par/convolution_threshold)[i*3:(i+1)*3]
-                                )<np.nansum(
-                                    ((np.sqrt(np.diag(best_cov)))/best_par/convolution_threshold)[i*3:(i+1)*3]
-                                                                                                                ):
-                                best_cov[i*3:(i+1)*3,i*3:(i+1)*3] = last_cov[i*3:(i+1)*3,i*3:(i+1)*3]
-                                best_par[i*3:(i+1)*3] = last_par[i*3:(i+1)*3]
-                                
-                                best_cov[-1,-1] = last_cov[-1,-1]
-                                best_par[-1]    = last_par[-1]
-                                all_good = False
-                    if all_good==True: break
+                elif np.nansum(
+                        (np.sqrt(np.diag(last_cov)))/last_par/convolution_threshold
+                    )<np.nansum(
+                        (np.sqrt(np.diag(best_cov)))/best_par/convolution_threshold
+                                                                                    ):
+                    best_cov = last_cov
+                    best_par = last_par
                     best_con = convolution_extent_list[i_ad]
-                        
-                            
-                            
-                        
         if verbose>=2 : print(f"best_par: {best_par}\nbest_con: {best_con}")
         
         lock.acquire()

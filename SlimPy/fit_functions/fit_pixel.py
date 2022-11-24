@@ -16,6 +16,9 @@ def fit_pixel_multi(x:np.ndarray,
                     quentities,
                     fit_func:Callable,
                     bounds:np.ndarray=[np.nan],
+                    I_bounds:np.ndarray=None,
+                    x_extent:np.array=None,
+                    
                     plotit: bool=False,
                     weights: str = None,
                     verbose=0,
@@ -47,11 +50,13 @@ def fit_pixel_multi(x:np.ndarray,
             if quentities[i] == "B":
                 bounds[:,i] = [-5,5]
             if quentities[i] == "I":
-                bounds[:,i] = [ 0,1.e4]
+                if type(I_bounds)!=type(None):bounds[:,i]=I_bounds
+                else:bounds[:,i] = [ 0,1.e4]
             if quentities[i] == "x":
-                bounds[:,i] = [ini_params[i]-2,ini_params[i]+2]
+                if type(x_extent)!=type(None):bounds[:,i]=[ini_params[i]-x_extent,ini_params[i]+x_extent]
+                else:bounds[:,i] = [ini_params[i]-1,ini_params[i]+1]
             if quentities[i] == "s":
-                bounds[:,i] = [0.28,2]
+                bounds[:,i] = [0.28,0.8]
         if verbose>=2: print(f"bounds were internally set:\n{bounds}")
                 
         
@@ -59,7 +64,12 @@ def fit_pixel_multi(x:np.ndarray,
     _x,_y,w =  clean_nans(x,y,weights)
 
     if _y.shape[0]<=_s:
-        if verbose>=0: print("after cleaning data the number of parameters is greater than data points")
+        if verbose>=0: print("after cleaning data the number of parameters is greater than data points\nPrecleaning size  = {}\nPostcleaning size = {}nans size         = {}".format(
+            y.shape[0],
+            _y.shape[0],
+            (y[np.isnan(y)]).shape[0]
+                                    )
+                             )
         return (np.ones((_s  ))*np.nan,
                 np.ones((_s,_s))*np.nan)
     try:
